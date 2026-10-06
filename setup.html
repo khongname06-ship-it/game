@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cài đặt Đua vịt trắc nghiệm</title>
+<style>
+:root{--ink:#16324f;--acc:#ff8a00;--ok:#2e9e5b;--bad:#d64045}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#e9f6ff;line-height:1.55}
+.wrap{max-width:820px;margin:0 auto;padding:16px}
+h1{margin:0 0 4px}
+.card{background:#fff;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 2px 10px #0001}
+.card h2{margin:0 0 8px;font-size:1.1rem}
+textarea,input{width:100%;padding:10px;font:inherit;border:2px solid #cfe3f3;border-radius:10px;margin:6px 0}
+textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem}
+button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}
+button.sec{background:#16324f}
+.res{margin-top:10px;font-weight:600;white-space:pre-wrap}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.note{color:#4a6a86;font-size:.9rem}
+a{color:#0a6ebd}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛠️ Cài đặt Đua vịt trắc nghiệm</h1>
+  <p class="note">Trang này giúp bạn kiểm tra Firebase và tạo sẵn link cho game, không cần sửa file trên GitHub.</p>
+
+  <div class="card">
+    <h2>Bước 1. Tạo Firebase (làm 1 lần)</h2>
+    <ol>
+      <li>Vào <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a>, bấm <b>Create a project</b>.</li>
+      <li><b>Build → Realtime Database → Create Database</b>, chọn khu vực Singapore, chọn test mode.</li>
+      <li>Tab <b>Rules</b>: xóa hết, dán luật bên dưới rồi bấm <b>Publish</b>.</li>
+      <li><b>Project settings (bánh răng) → Your apps → biểu tượng &lt;/&gt;</b> → đăng ký app → copy khối <code>firebaseConfig</code>.</li>
+    </ol>
+    <textarea id="rules" rows="12" readonly>{
+  "rules": {
+    "rooms": {
+      "$room": {
+        "meta": {
+          ".read": true,
+          "startedAt": { ".write": true, ".validate": "newData.isNumber()" }
+        },
+        "players": {
+          ".read": true,
+          "$pid": {
+            ".write": true,
+            ".validate": "newData.hasChildren(['name','score','at']) && newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('score').isNumber() && newData.child('score').val() <= 20000"
+          }
+        }
+      }
+    }
+  }
+}</textarea>
+    <button class="sec" id="copyRules">Sao chép luật</button>
+  </div>
+
+  <div class="card">
+    <h2>Bước 2. Dán cấu hình Firebase</h2>
+    <p class="note">Dán nguyên khối <code>const firebaseConfig = { ... }</code> (hoặc chỉ phần trong ngoặc nhọn) vào đây.</p>
+    <textarea id="cfg" rows="9" placeholder='const firebaseConfig = {&#10;  apiKey: "AIza...",&#10;  authDomain: "...firebaseapp.com",&#10;  databaseURL: "https://...firebasedatabase.app",&#10;  projectId: "..."&#10;};'></textarea>
+    <label for="room"><b>Tên phòng</b> (đổi mỗi buổi thuyết trình để không dính điểm cũ)</label>
+    <input id="room" type="text">
+    <button id="test">Kiểm tra kết nối</button>
+    <div class="res" id="out"></div>
+  </div>
+
+  <div class="card hide" id="links" style="display:none">
+    <h2>Bước 3. Link của bạn</h2>
+    <p><b>Link CHỦ TRÌ</b> (chiếu lên màn hình, có nút BẮT ĐẦU). Giữ riêng cho bạn:</p>
+    <textarea id="hostLink" rows="3" readonly></textarea>
+    <button class="sec" data-copy="hostLink">Sao chép link chủ trì</button>
+    <p style="margin-top:16px"><b>Link NGƯỜI CHƠI</b> (gửi cho người nghe):</p>
+    <textarea id="playLink" rows="3" readonly></textarea>
+    <button class="sec" data-copy="playLink">Sao chép link người chơi</button>
+    <p class="note" style="margin-top:16px">Hai link này đã chứa sẵn cấu hình, bạn không cần sửa <code>config.js</code>. Muốn bắt đầu ván mới sạch điểm, đổi tên phòng ở Bước 2 rồi bấm kiểm tra lại để lấy link mới.</p>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+$("room").value = "phong-" + Math.random().toString(36).slice(2, 7);
+const copy = async (text, btn) => { try { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = "Đã sao chép ✓"; setTimeout(() => btn.textContent = t, 1500); } catch { alert("Hãy bôi đen và copy thủ công."); } };
+$("copyRules").onclick = e => copy($("rules").value, e.target);
+document.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => copy($(b.dataset.copy).value, b));
+
+function parseCfg(t) {
+  const g = k => { const m = t.match(new RegExp(k + "\\s*[:=]\\s*[\"'`]([^\"'`]+)[\"'`]")); return m ? m[1].trim() : ""; };
+  return { apiKey: g("apiKey"), authDomain: g("authDomain"), databaseURL: g("databaseURL"), projectId: g("projectId") };
+}
+function candidates(c) {
+  const list = [];
+  if (c.databaseURL) list.push(c.databaseURL);
+  if (c.projectId) {
+    list.push(`https://${c.projectId}-default-rtdb.firebaseio.com`);
+    list.push(`https://${c.projectId}-default-rtdb.asia-southeast1.firebasedatabase.app`);
+    list.push(`https://${c.projectId}-default-rtdb.europe-west1.firebasedatabase.app`);
+  }
+  return [...new Set(list)];
+}
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error("timeout")), ms))]);
+
+async function tryUrl(cfg, url, room) {
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+  const { getDatabase, ref, set, get, onValue } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+  const app = initializeApp({ ...cfg, databaseURL: url }, "t" + Math.random());
+  const db = getDatabase(app);
+  const connected = await new Promise(res => {
+    let done = false;
+    const t = setTimeout(() => { if (!done) { done = true; res(false); } }, 6000);
+    onValue(ref(db, ".info/connected"), s => { if (s.val() === true && !done) { done = true; clearTimeout(t); res(true); } });
+  });
+  if (!connected) return { stage: "connect" };
+  try { await withTimeout(get(ref(db, `rooms/${room}/meta`)), 6000); } catch (e) { return { stage: "read", err: e.message }; }
+  try { const r = ref(db, `rooms/${room}/players/_setup_test`); await withTimeout(set(r, { name: "test", score: 0, at: Date.now() }), 6000); await withTimeout(set(r, null), 6000); }
+  catch (e) { return { stage: "write", err: e.message }; }
+  return { ok: true, url };
+}
+
+$("test").onclick = async () => {
+  const out = $("out"); out.className = "res"; $("links").style.display = "none";
+  const cfg = parseCfg($("cfg").value), room = $("room").value.trim().replace(/[^a-zA-Z0-9_-]/g, "") || "phong-1";
+  $("room").value = room;
+  if (!cfg.apiKey || !cfg.projectId) { out.className = "res bad"; out.textContent = "❌ Chưa đọc được apiKey hoặc projectId. Hãy dán đúng khối firebaseConfig từ Firebase (Bước 1, mục 4)."; return; }
+  out.textContent = "Đang kiểm tra kết nối...";
+  let last = null;
+  for (const url of candidates(cfg)) {
+    out.textContent = "Đang thử " + url + " ...";
+    let r; try { r = await tryUrl(cfg, url, room); } catch (e) { r = { stage: "connect", err: e.message }; }
+    if (r.ok) { done({ ...cfg, databaseURL: url }, room, url !== cfg.databaseURL); return; }
+    if (r.stage !== "connect") { last = r; break; }   // kết nối được nhưng bị chặn bởi luật
+    last = last || r;
+  }
+  out.className = "res bad";
+  if (last && last.stage === "read") out.textContent = "❌ Kết nối được nhưng không đọc được dữ liệu. Có thể bạn chưa bấm Publish ở tab Rules (Bước 1, mục 3).\nChi tiết: " + last.err;
+  else if (last && last.stage === "write") out.textContent = "❌ Kết nối được nhưng không ghi được. Hãy kiểm tra luật đã dán đúng và bấm Publish chưa.\nChi tiết: " + last.err;
+  else out.textContent = "❌ Không kết nối được Firebase. Hãy kiểm tra: (1) đã bấm Create Database ở mục Realtime Database chưa, (2) dòng databaseURL có trong khối bạn dán không.";
+};
+
+function done(cfg, room, fixed) {
+  $("out").className = "res ok";
+  $("out").textContent = "✅ Kết nối thành công, đọc và ghi đều ổn!" + (fixed ? "\n(Mình đã tự tìm đúng databaseURL: " + cfg.databaseURL + ")" : "");
+  const base = new URL("index.html", location.href).href;
+  const enc = encodeURIComponent(btoa(JSON.stringify({ c: { apiKey: cfg.apiKey, authDomain: cfg.authDomain, databaseURL: cfg.databaseURL, projectId: cfg.projectId }, r: room })));
+  $("hostLink").value = base + "?host=1#cfg=" + enc;
+  $("playLink").value = base + "#cfg=" + enc;
+  $("links").style.display = "block";
+  $("links").scrollIntoView({ behavior: "smooth" });
+}
+</script>
+</body>
+</html>
